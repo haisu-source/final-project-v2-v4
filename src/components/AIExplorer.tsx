@@ -15,7 +15,7 @@ interface RelatedArticle {
 interface Result {
   analysis: string;
   relatedArticles: RelatedArticle[];
-  demo?: boolean;
+
 }
 
 const SUGGESTIONS = [
@@ -125,11 +125,6 @@ export default function AIExplorer() {
       {result && (
         <div className="space-y-4">
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            {result.demo && (
-              <span className="mb-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
-                Demo response
-              </span>
-            )}
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
               {result.analysis}
             </p>

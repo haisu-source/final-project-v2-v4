@@ -1,6 +1,4 @@
 import { auth } from "@clerk/nextjs/server";
-import { IS_DEMO_MODE_DB } from "@/lib/demo-mode";
-import { toggleLike } from "@/lib/mock-store";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +12,6 @@ async function handle(req: Request) {
   const { comment_id } = (await req.json()) as { comment_id?: string };
   if (!comment_id) {
     return Response.json({ error: "comment_id required" }, { status: 400 });
-  }
-
-  if (IS_DEMO_MODE_DB) {
-    const result = toggleLike(comment_id, userId);
-    return Response.json(result);
   }
 
   const supabase = getSupabase();

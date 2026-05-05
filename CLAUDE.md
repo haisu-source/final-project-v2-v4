@@ -8,7 +8,7 @@ A community discussion platform bridging physical community newspapers to digita
 - **Styling:** Tailwind CSS v4 with custom theme tokens
 - **Database:** Supabase (PostgreSQL) with Realtime subscriptions
 - **Auth:** Clerk (drop-in, social logins)
-- **AI:** Anthropic Claude API for article exploration and discussion summaries
+- **AI:** Groq API (Llama 3.3 70B) for article exploration and discussion summaries
 - **QR Codes:** `qrcode` npm package, generated per article
 - **Deployment:** Vercel
 
@@ -47,6 +47,7 @@ supabase/
   migrations/
     001_initial.sql       # Tables, indexes, RLS, seed data
     002_functions.sql     # RPC functions for atomic counters
+    003_actions_events.sql # Actions + community events tables + seed data
 ```
 
 ## Key Patterns
@@ -55,14 +56,14 @@ supabase/
 - Comments use Supabase Realtime for live updates (postgres_changes)
 - Comment tree is built client-side from flat list using `buildCommentTree()`
 - Like/view counts use Supabase RPC functions for atomic increments
-- AI features hit Claude API server-side, passing article corpus as context
+- AI features hit Groq API (Llama 3.3 70B) server-side, passing article corpus as context
 
 ## Environment Variables
 
 Copy `.env.local.example` to `.env.local` and fill in:
 - Supabase URL + anon key
 - Clerk publishable + secret keys
-- Anthropic API key
+- Groq API key
 
 ## Database Setup
 

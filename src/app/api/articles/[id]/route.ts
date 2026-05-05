@@ -1,5 +1,3 @@
-import { IS_DEMO_MODE_DB } from "@/lib/demo-mode";
-import { getArticle, getEngagement } from "@/lib/mock-store";
 import { getSupabase } from "@/lib/supabase";
 import type { Article } from "@/lib/types";
 
@@ -10,16 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-
-  if (IS_DEMO_MODE_DB) {
-    const article = getArticle(id);
-    if (!article) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
-    return Response.json({ article, stats: getEngagement(id) });
-  }
-
   const supabase = getSupabase();
+
   const { data, error } = await supabase
     .from("articles")
     .select("*")
@@ -28,8 +18,14 @@ export async function GET(
   if (error || !data) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
+
+  const { data: statsData } = await supabase.rpc("get_article_stats", {
+    p_article_id: id,
+  });
+  const row = statsData?.[0] ?? { views: 0, comments: 0, likes: 0 };
+
   return Response.json({
     article: data as Article,
-    stats: { views: 0, comments: 0, likes: 0 },
+    stats: { views: row.views, comments: row.comments, likes: row.likes },
   });
 }

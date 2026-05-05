@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Source_Serif_4 } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import Header from "@/components/Header";
-import DemoModeBanner from "@/components/DemoModeBanner";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,7 +33,6 @@ export default function RootLayout({
         className={`${geistSans.variable} ${sourceSerif.variable} h-full antialiased`}
       >
         <body className="flex min-h-full flex-col bg-[var(--bg)] text-[var(--ink)]">
-          <DemoModeBanner />
           <Header />
           <main className="flex-1">{children}</main>
           <footer className="border-t border-[var(--border)] py-6 text-center text-xs text-[var(--muted)]">

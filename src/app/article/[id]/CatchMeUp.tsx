@@ -6,7 +6,6 @@ import { SparkleIcon } from "@/components/icons";
 export default function CatchMeUp({ articleId }: { articleId: string }) {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
-  const [demo, setDemo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function run() {
@@ -19,9 +18,8 @@ export default function CatchMeUp({ articleId }: { articleId: string }) {
         body: JSON.stringify({ articleId }),
       });
       if (!res.ok) throw new Error("Could not summarize");
-      const j = (await res.json()) as { summary: string; demo?: boolean };
+      const j = (await res.json()) as { summary: string };
       setSummary(j.summary);
-      setDemo(!!j.demo);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -37,11 +35,6 @@ export default function CatchMeUp({ articleId }: { articleId: string }) {
           <span className="text-xs font-semibold uppercase tracking-wide text-[var(--ink)]">
             Catch me up
           </span>
-          {demo && (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
-              Demo
-            </span>
-          )}
         </div>
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
           {summary}

@@ -8,20 +8,17 @@ import CommentInput from "./CommentInput";
 
 interface Props {
   articleId: string;
-  isDemoModeDb: boolean;
   supabaseUrl?: string;
   supabaseKey?: string;
 }
 
 export default function CommentSection({
   articleId,
-  isDemoModeDb,
   supabaseUrl,
   supabaseKey,
 }: Props) {
   const [comments, setComments] = useState<CommentType[]>([]);
   const [loading, setLoading] = useState(true);
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/comments?articleId=${articleId}`, {
@@ -39,15 +36,6 @@ export default function CommentSection({
   }, [load]);
 
   useEffect(() => {
-    if (isDemoModeDb) {
-      pollTimer.current = setInterval(() => {
-        if (!document.hidden) load();
-      }, 5000);
-      return () => {
-        if (pollTimer.current) clearInterval(pollTimer.current);
-      };
-    }
-
     if (!supabaseUrl || !supabaseKey) return;
     let unmounted = false;
     let cleanup: (() => void) | null = null;
@@ -80,7 +68,7 @@ export default function CommentSection({
       unmounted = true;
       if (cleanup) cleanup();
     };
-  }, [articleId, isDemoModeDb, load, supabaseKey, supabaseUrl]);
+  }, [articleId, load, supabaseKey, supabaseUrl]);
 
   const tree = buildCommentTree(comments, 2);
 
@@ -98,7 +86,7 @@ export default function CommentSection({
       <CommentInput articleId={articleId} onPosted={load} />
 
       {loading && (
-        <p className="text-sm text-[var(--muted)]">Loading discussion…</p>
+        <p className="text-sm text-[var(--muted)]">Loading discussion...</p>
       )}
       {!loading && tree.length === 0 && (
         <p className="text-sm text-[var(--muted)]">

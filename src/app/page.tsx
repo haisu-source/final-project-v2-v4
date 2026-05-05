@@ -1,8 +1,6 @@
 import Link from "next/link";
 import ArticleCard from "@/components/ArticleCard";
 import type { Article, Category, EngagementStats } from "@/lib/types";
-import { IS_DEMO_MODE_DB } from "@/lib/demo-mode";
-import { getArticles, getEngagement } from "@/lib/mock-store";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -28,36 +26,38 @@ type FeedItem = Article & { stats: EngagementStats };
 
 async function fetchFeed(
   sort: string,
-  category: string | null
+  category: string | null,
+  location: string | null
 ): Promise<FeedItem[]> {
-  // Resolve articles directly from the data layer. Server Components
-  // should not HTTP-fetch their own API routes — that round-trip can
-  // time out on Vercel and is an anti-pattern.
-  let articles: Article[];
-  if (IS_DEMO_MODE_DB) {
-    articles = getArticles();
-  } else {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from("articles")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) return [];
-    articles = (data as Article[]) ?? [];
+  const supabase = getSupabase();
+  const query = supabase
+    .from("articles")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (category) {
+    query.eq("category", category);
+  }
+  if (location) {
+    query.ilike("location", `%${location}%`);
   }
 
-  const cat =
-    category && (VALID_CATEGORIES as string[]).includes(category)
-      ? (category as Category)
-      : null;
-  if (cat) articles = articles.filter((a) => a.category === cat);
+  const { data, error } = await query;
+  if (error) return [];
+  const articles = (data as Article[]) ?? [];
 
-  const decorated: FeedItem[] = articles.map((a) => ({
-    ...a,
-    stats: IS_DEMO_MODE_DB
-      ? getEngagement(a.id)
-      : { views: 0, comments: 0, likes: 0 },
-  }));
+  const decorated: FeedItem[] = await Promise.all(
+    articles.map(async (a) => {
+      const { data: statsData } = await supabase.rpc("get_article_stats", {
+        p_article_id: a.id,
+      });
+      const row = statsData?.[0] ?? { views: 0, comments: 0, likes: 0 };
+      return {
+        ...a,
+        stats: { views: row.views, comments: row.comments, likes: row.likes },
+      };
+    })
+  );
 
   if (sort === "trending") {
     decorated.sort((a, b) => {
@@ -83,14 +83,31 @@ async function fetchFeed(
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; location?: string }>;
 }) {
   const sp = await searchParams;
   const activeCategory = sp.category ?? "all";
+  const activeLocation = sp.location ?? null;
+
+  const cat =
+    activeCategory !== "all" &&
+    (VALID_CATEGORIES as string[]).includes(activeCategory)
+      ? activeCategory
+      : null;
+
+  // Fetch available locations for the filter pills.
+  const supabase = getSupabase();
+  const { data: locData } = await supabase
+    .from("articles")
+    .select("location")
+    .not("location", "is", null);
+  const locations = Array.from(
+    new Set((locData ?? []).map((r: { location: string }) => r.location).filter(Boolean))
+  ).sort() as string[];
 
   const [trending, recent] = await Promise.all([
-    fetchFeed("trending", activeCategory),
-    fetchFeed("recent", activeCategory),
+    fetchFeed("trending", cat, activeLocation),
+    fetchFeed("recent", cat, activeLocation),
   ]);
 
   return (
@@ -105,13 +122,47 @@ export default async function HomePage({
         </p>
       </section>
 
+      {locations.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Location
+          </span>
+          {[{ value: null, label: "All" }, ...locations.map((l) => ({ value: l, label: l }))].map(
+            (loc) => {
+              const isActive =
+                (loc.value === null && !activeLocation) ||
+                loc.value === activeLocation;
+              const params = new URLSearchParams();
+              if (loc.value) params.set("location", loc.value);
+              if (cat) params.set("category", cat);
+              const href = params.toString() ? `/?${params}` : "/";
+              return (
+                <Link
+                  key={loc.label}
+                  href={href}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isActive
+                      ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--bg)]"
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--ink)]"
+                  }`}
+                >
+                  {loc.label}
+                </Link>
+              );
+            }
+          )}
+        </div>
+      )}
+
       <div className="mb-6 flex flex-wrap items-center gap-2">
         {CATEGORIES.map((c) => {
           const isActive =
             (c.value === "all" && activeCategory === "all") ||
             c.value === activeCategory;
-          const href =
-            c.value === "all" ? "/" : `/?category=${c.value}`;
+          const params = new URLSearchParams();
+          if (c.value !== "all") params.set("category", c.value);
+          if (activeLocation) params.set("location", activeLocation);
+          const href = params.toString() ? `/?${params}` : "/";
           return (
             <Link
               key={c.value}

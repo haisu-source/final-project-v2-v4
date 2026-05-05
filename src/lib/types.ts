@@ -46,3 +46,35 @@ export interface EngagementStats {
   comments: number;
   likes: number;
 }
+
+export type ActionKind =
+  | "pressure"   // pack a hearing, pressure a vote
+  | "birddog"    // contact / corner specific named officials
+  | "organize"   // join a coalition, phone bank, build power
+  | "testify"    // submit public comment / testimony
+  | "petition"   // sign a demand
+  | "amplify";   // teach, run a workshop, share the curriculum
+
+export interface Action {
+  id: string;
+  article_id: string;
+  kind: ActionKind;
+  title: string;
+  description: string;
+  url?: string;
+  cta_label?: string;
+  target?: string; // who's the power holder being pressured
+}
+
+export interface CommunityEvent {
+  id: string;
+  article_id: string;
+  title: string;
+  description: string;
+  starts_at: string;     // ISO
+  ends_at?: string;
+  location: string;       // human-readable
+  is_online: boolean;
+  url?: string;
+  organizer?: string;
+}

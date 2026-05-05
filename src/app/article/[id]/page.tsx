@@ -1,13 +1,12 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { formatDistanceToNow } from "date-fns";
-import { IS_DEMO_MODE_DB } from "@/lib/demo-mode";
-import { getArticle, getEngagement, recordView } from "@/lib/mock-store";
 import { getSupabase } from "@/lib/supabase";
-import type { Article, EngagementStats } from "@/lib/types";
+import type { Action, Article, CommunityEvent, EngagementStats } from "@/lib/types";
 import CommentSection from "@/components/CommentSection";
 import EngagementMetrics from "@/components/EngagementMetrics";
 import QRCode from "@/components/QRCode";
+import ActionsAndEvents from "@/components/ActionsAndEvents";
 import CatchMeUp from "./CatchMeUp";
 import crypto from "crypto";
 
@@ -24,31 +23,49 @@ const CATEGORY_LABEL: Record<string, string> = {
 async function loadArticle(id: string): Promise<{
   article: Article;
   stats: EngagementStats;
+  actions: Action[];
+  events: CommunityEvent[];
 } | null> {
-  if (IS_DEMO_MODE_DB) {
-    const article = getArticle(id);
-    if (!article) return null;
-    // Record a view for the SSR request.
-    const h = await headers();
-    const ip =
-      h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? "anon";
-    const ua = h.get("user-agent") ?? "anon";
-    recordView(
-      id,
-      crypto.createHash("sha256").update(`${ip}|${ua}`).digest("hex")
-    );
-    return { article, stats: getEngagement(id) };
-  }
   const supabase = getSupabase();
+
   const { data, error } = await supabase
     .from("articles")
     .select("*")
     .eq("id", id)
     .single();
   if (error || !data) return null;
+
+  const article = data as Article;
+
+  // Record a view for this SSR request.
+  const h = await headers();
+  const ip =
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? "anon";
+  const ua = h.get("user-agent") ?? "anon";
+  const viewerHash = crypto.createHash("sha256").update(`${ip}|${ua}`).digest("hex");
+  await supabase.rpc("increment_view", {
+    p_article_id: id,
+    p_viewer_hash: viewerHash,
+  });
+
+  // Fetch stats, actions, events in parallel.
+  const [statsRes, actionsRes, eventsRes] = await Promise.all([
+    supabase.rpc("get_article_stats", { p_article_id: id }),
+    supabase.from("actions").select("*").eq("article_id", id),
+    supabase
+      .from("community_events")
+      .select("*")
+      .eq("article_id", id)
+      .order("starts_at", { ascending: true }),
+  ]);
+
+  const statsRow = statsRes.data?.[0] ?? { views: 0, comments: 0, likes: 0 };
+
   return {
-    article: data as Article,
-    stats: { views: 0, comments: 0, likes: 0 },
+    article,
+    stats: { views: statsRow.views, comments: statsRow.comments, likes: statsRow.likes },
+    actions: (actionsRes.data as Action[]) ?? [],
+    events: (eventsRes.data as CommunityEvent[]) ?? [],
   };
 }
 
@@ -61,7 +78,7 @@ export default async function ArticlePage({
   const data = await loadArticle(id);
   if (!data) notFound();
 
-  const { article, stats } = data;
+  const { article, stats, actions, events } = data;
   const time = formatDistanceToNow(new Date(article.created_at), {
     addSuffix: true,
   });
@@ -103,6 +120,8 @@ export default async function ArticlePage({
         ))}
       </div>
 
+      <ActionsAndEvents actions={actions} events={events} />
+
       <div className="mt-8">
         <CatchMeUp articleId={article.id} />
       </div>
@@ -110,7 +129,6 @@ export default async function ArticlePage({
       <div className="mt-10">
         <CommentSection
           articleId={article.id}
-          isDemoModeDb={IS_DEMO_MODE_DB}
           supabaseUrl={supabaseUrl}
           supabaseKey={supabaseKey}
         />

@@ -1,7 +1,5 @@
 import { NextRequest } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { IS_DEMO_MODE_DB } from "@/lib/demo-mode";
-import { addComment, getComments, userLikedComment } from "@/lib/mock-store";
 import { getSupabase } from "@/lib/supabase";
 import type { Comment } from "@/lib/types";
 
@@ -14,27 +12,43 @@ export async function GET(req: NextRequest) {
   }
 
   const { userId } = await auth();
+  const supabase = getSupabase();
 
-  let comments: Comment[];
-  if (IS_DEMO_MODE_DB) {
-    comments = getComments(articleId).map((c) => ({
-      ...c,
-      liked_by_me: userId ? userLikedComment(c.id, userId) : false,
-    }));
-  } else {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from("comments")
-      .select("*")
-      .eq("article_id", articleId)
-      .order("created_at", { ascending: true });
-    if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
-    }
-    comments = (data as Comment[]) ?? [];
+  const { data, error } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("article_id", articleId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  const comments = (data as Comment[]) ?? [];
+
+  // Annotate with like_count and liked_by_me.
+  const commentIds = comments.map((c) => c.id);
+  const { data: likes } = await supabase
+    .from("likes")
+    .select("comment_id, user_id")
+    .in("comment_id", commentIds.length > 0 ? commentIds : ["__none__"]);
+
+  const likesByComment = new Map<string, { count: number; myLike: boolean }>();
+  for (const like of likes ?? []) {
+    const entry = likesByComment.get(like.comment_id) ?? { count: 0, myLike: false };
+    entry.count++;
+    if (userId && like.user_id === userId) entry.myLike = true;
+    likesByComment.set(like.comment_id, entry);
   }
 
-  return Response.json({ comments });
+  const annotated = comments.map((c) => {
+    const info = likesByComment.get(c.id);
+    return {
+      ...c,
+      like_count: info?.count ?? 0,
+      liked_by_me: info?.myLike ?? false,
+    };
+  });
+
+  return Response.json({ comments: annotated });
 }
 
 export async function POST(req: NextRequest) {
@@ -67,18 +81,6 @@ export async function POST(req: NextRequest) {
   }
 
   const trimmed = body.body.trim().slice(0, 2000);
-
-  if (IS_DEMO_MODE_DB) {
-    const c = addComment({
-      article_id: body.article_id,
-      user_id: userId,
-      user_name: userName,
-      user_avatar: userAvatar,
-      body: trimmed,
-      parent_id: body.parent_id ?? null,
-    });
-    return Response.json({ comment: c }, { status: 201 });
-  }
 
   const supabase = getSupabase();
   const { data, error } = await supabase

@@ -1,6 +1,4 @@
 import { NextRequest } from "next/server";
-import { IS_DEMO_MODE_DB } from "@/lib/demo-mode";
-import { getArticles, getEngagement } from "@/lib/mock-store";
 import { getSupabase } from "@/lib/supabase";
 import type { Article, Category } from "@/lib/types";
 
@@ -22,37 +20,40 @@ export async function GET(req: NextRequest) {
       ? (categoryParam as Category)
       : null;
 
-  let articles: Article[];
+  const location = req.nextUrl.searchParams.get("location");
 
-  if (IS_DEMO_MODE_DB) {
-    articles = getArticles();
-  } else {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from("articles")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
-    }
-    articles = (data as Article[]) ?? [];
-  }
+  const supabase = getSupabase();
+  const query = supabase
+    .from("articles")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (category) {
-    articles = articles.filter((a) => a.category === category);
+    query.eq("category", category);
+  }
+  if (location) {
+    query.ilike("location", `%${location}%`);
   }
 
-  // Decorate with engagement so the home feed can sort by it.
-  const decorated = articles.map((a) => {
-    const stats = IS_DEMO_MODE_DB
-      ? getEngagement(a.id)
-      : { views: 0, comments: 0, likes: 0 };
-    return { ...a, stats };
-  });
+  const { data, error } = await query;
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  const articles = (data as Article[]) ?? [];
+
+  // Fetch engagement stats for each article via RPC.
+  const decorated = await Promise.all(
+    articles.map(async (a) => {
+      const { data: statsData } = await supabase.rpc("get_article_stats", {
+        p_article_id: a.id,
+      });
+      const row = statsData?.[0] ?? { views: 0, comments: 0, likes: 0 };
+      return { ...a, stats: { views: row.views, comments: row.comments, likes: row.likes } };
+    })
+  );
 
   if (sort === "trending") {
     decorated.sort((a, b) => {
-      // Simple trending score: views + 4*comments + 2*likes, decayed by age in days.
       const score = (x: typeof a) => {
         const ageDays =
           (Date.now() - new Date(x.created_at).getTime()) /
@@ -62,11 +63,6 @@ export async function GET(req: NextRequest) {
       };
       return score(b) - score(a);
     });
-  } else {
-    decorated.sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
   }
 
   return Response.json({ articles: decorated });

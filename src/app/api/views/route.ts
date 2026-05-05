@@ -1,7 +1,5 @@
 import { headers } from "next/headers";
 import crypto from "crypto";
-import { IS_DEMO_MODE_DB } from "@/lib/demo-mode";
-import { recordView } from "@/lib/mock-store";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -24,13 +22,7 @@ export async function POST(req: Request) {
 
   const hash = await viewerHash();
 
-  if (IS_DEMO_MODE_DB) {
-    const total = recordView(article_id, hash);
-    return Response.json({ ok: true, views: total });
-  }
-
   const supabase = getSupabase();
-  // Use the increment_view RPC which handles unique-or-insert.
   const { data, error } = await supabase.rpc("increment_view", {
     p_article_id: article_id,
     p_viewer_hash: hash,
