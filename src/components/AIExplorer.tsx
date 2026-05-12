@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { SearchIcon, SparkleIcon } from "./icons";
 
@@ -10,12 +10,6 @@ interface RelatedArticle {
   source: string;
   category: string;
   relevance: string;
-}
-
-interface Result {
-  analysis: string;
-  relatedArticles: RelatedArticle[];
-
 }
 
 const SUGGESTIONS = [
@@ -28,25 +22,68 @@ const SUGGESTIONS = [
 export default function AIExplorer() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<Result | null>(null);
+  const [analysis, setAnalysis] = useState("");
+  const [related, setRelated] = useState<RelatedArticle[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [hasResult, setHasResult] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   async function ask(q: string) {
     if (!q.trim()) return;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
     setLoading(true);
     setError(null);
+    setAnalysis("");
+    setRelated([]);
+    setHasResult(true);
+
     try {
       const res = await fetch("/api/ai/explore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: q.trim() }),
+        signal: ctrl.signal,
       });
       if (!res.ok) {
-        throw new Error("Request failed");
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? "Request failed");
       }
-      const j = (await res.json()) as Result;
-      setResult(j);
+      if (!res.body) throw new Error("No response body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const msg = JSON.parse(trimmed) as
+              | { type: "text"; value: string }
+              | { type: "related"; articles: RelatedArticle[] }
+              | { type: "error"; message: string };
+            if (msg.type === "text") {
+              setAnalysis((prev) => prev + msg.value);
+            } else if (msg.type === "related") {
+              setRelated(msg.articles);
+            } else if (msg.type === "error") {
+              setError(msg.message);
+            }
+          } catch {
+            // ignore partial line
+          }
+        }
+      }
     } catch (e) {
+      if ((e as Error).name === "AbortError") return;
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setLoading(false);
@@ -94,7 +131,7 @@ export default function AIExplorer() {
         </button>
       </form>
 
-      {!result && !loading && (
+      {!hasResult && !loading && (
         <div className="flex flex-wrap gap-2">
           {SUGGESTIONS.map((s) => (
             <button
@@ -113,30 +150,33 @@ export default function AIExplorer() {
 
       {error && <p className="text-sm text-[var(--primary)]">{error}</p>}
 
-      {loading && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
-          <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--muted-bg)]" />
-          <div className="mt-3 h-3 w-full animate-pulse rounded bg-[var(--muted-bg)]" />
-          <div className="mt-2 h-3 w-5/6 animate-pulse rounded bg-[var(--muted-bg)]" />
-          <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-[var(--muted-bg)]" />
-        </div>
-      )}
-
-      {result && (
+      {hasResult && (
         <div className="space-y-4">
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
-              {result.analysis}
-            </p>
+            {analysis ? (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
+                {analysis}
+                {loading && (
+                  <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-px animate-pulse bg-[var(--primary)] align-middle" />
+                )}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--muted-bg)]" />
+                <div className="h-3 w-full animate-pulse rounded bg-[var(--muted-bg)]" />
+                <div className="h-3 w-5/6 animate-pulse rounded bg-[var(--muted-bg)]" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-[var(--muted-bg)]" />
+              </div>
+            )}
           </div>
 
-          {result.relatedArticles.length > 0 && (
+          {related.length > 0 && (
             <div>
               <h2 className="mb-2 font-serif text-lg font-semibold text-[var(--ink)]">
                 Related coverage
               </h2>
               <div className="grid gap-3 sm:grid-cols-2">
-                {result.relatedArticles.map((a) => (
+                {related.map((a) => (
                   <Link
                     key={a.id}
                     href={`/article/${a.id}`}

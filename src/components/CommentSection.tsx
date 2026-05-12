@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Comment as CommentType } from "@/lib/types";
 import { buildCommentTree } from "@/lib/comment-tree";
 import Comment from "./Comment";
@@ -86,12 +86,33 @@ export default function CommentSection({
       <CommentInput articleId={articleId} onPosted={load} />
 
       {loading && (
-        <p className="text-sm text-[var(--muted)]">Loading discussion...</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"
+            >
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-[var(--muted-bg)]" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-3 w-32 animate-pulse rounded bg-[var(--muted-bg)]" />
+                  <div className="h-3 w-full animate-pulse rounded bg-[var(--muted-bg)]" />
+                  <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--muted-bg)]" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
       {!loading && tree.length === 0 && (
-        <p className="text-sm text-[var(--muted)]">
-          No comments yet. Be the first.
-        </p>
+        <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-center">
+          <p className="text-sm font-medium text-[var(--ink)]">
+            No comments yet.
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Be the first to weigh in on what this means for your block.
+          </p>
+        </div>
       )}
 
       <div className="space-y-3">

@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getSupabase } from "@/lib/supabase";
 import type { Comment } from "@/lib/types";
+import { moderateComment } from "@/lib/moderation";
+import { rateLimit, clientKey } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,17 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const limit = rateLimit(`comment:${clientKey(req, userId)}`, {
+    capacity: 5,
+    refillPerSec: 5 / 30,
+  });
+  if (!limit.ok) {
+    return Response.json(
+      { error: "You're posting too quickly. Take a breath and try again." },
+      { status: 429 }
+    );
+  }
+
   const user = await currentUser();
   const userName =
     user?.firstName && user?.lastName
@@ -80,7 +93,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const trimmed = body.body.trim().slice(0, 2000);
+  if (body.body.length > 1200) {
+    return Response.json(
+      { error: "Comment is too long. Please keep it under 1000 characters." },
+      { status: 400 }
+    );
+  }
+
+  const trimmed = body.body.trim().slice(0, 1000);
+
+  const guard = moderateComment(trimmed);
+  if (!guard.ok) {
+    return Response.json({ error: guard.reason }, { status: 400 });
+  }
 
   const supabase = getSupabase();
   const { data, error } = await supabase

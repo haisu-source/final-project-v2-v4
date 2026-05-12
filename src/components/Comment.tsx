@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@clerk/nextjs";
 import type { Comment as CommentType } from "@/lib/types";
-import { HeartIcon, ReplyIcon } from "./icons";
+import { HeartIcon, ReplyIcon, FlagIcon } from "./icons";
 import CommentInput from "./CommentInput";
 
 interface Props {
@@ -25,6 +25,10 @@ export default function Comment({
   const [liked, setLiked] = useState<boolean>(!!comment.liked_by_me);
   const [likeCount, setLikeCount] = useState<number>(comment.like_count ?? 0);
   const [animate, setAnimate] = useState(false);
+  const [reportState, setReportState] = useState<"idle" | "sending" | "done">(
+    "idle"
+  );
+  const requestSeqRef = useRef(0);
 
   const initial = (comment.user_name?.[0] ?? "?").toUpperCase();
   const time = formatDistanceToNow(new Date(comment.created_at), {
@@ -38,24 +42,62 @@ export default function Comment({
     }
     setAnimate(true);
     setTimeout(() => setAnimate(false), 250);
+
     const prevLiked = liked;
     const prevCount = likeCount;
-    setLiked(!prevLiked);
+    const nextLiked = !prevLiked;
+    setLiked(nextLiked);
     setLikeCount(prevCount + (prevLiked ? -1 : 1));
 
-    const res = await fetch("/api/likes", {
-      method: prevLiked ? "DELETE" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ comment_id: comment.id }),
-    });
-    if (!res.ok) {
-      setLiked(prevLiked);
-      setLikeCount(prevCount);
+    const seq = ++requestSeqRef.current;
+    try {
+      const res = await fetch("/api/likes", {
+        method: prevLiked ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment_id: comment.id }),
+      });
+      if (!res.ok) throw new Error("like failed");
+      const j = (await res.json()) as { liked: boolean; count: number };
+      // Only apply if this is still the latest click — otherwise a newer
+      // optimistic update is the source of truth.
+      if (seq === requestSeqRef.current) {
+        setLiked(j.liked);
+        setLikeCount(j.count);
+      }
+    } catch {
+      if (seq === requestSeqRef.current) {
+        setLiked(prevLiked);
+        setLikeCount(prevCount);
+      }
+    }
+  }
+
+  async function report() {
+    if (reportState !== "idle") return;
+    if (!isSignedIn) {
+      window.location.href = "/sign-in";
       return;
     }
-    const j = (await res.json()) as { liked: boolean; count: number };
-    setLiked(j.liked);
-    setLikeCount(j.count);
+    if (
+      !window.confirm(
+        "Report this comment to PressHub moderators? They'll review it shortly."
+      )
+    ) {
+      return;
+    }
+    setReportState("sending");
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment_id: comment.id }),
+      });
+      if (!res.ok && res.status !== 409) throw new Error("Failed to report");
+      setReportState("done");
+    } catch {
+      setReportState("idle");
+      window.alert("Couldn't submit the report. Please try again.");
+    }
   }
 
   return (
@@ -109,6 +151,21 @@ export default function Comment({
             >
               <ReplyIcon size={14} />
               <span>Reply</span>
+            </button>
+            <button
+              onClick={report}
+              disabled={reportState !== "idle"}
+              className="ml-auto flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--ink)] disabled:cursor-default disabled:opacity-60"
+              aria-label="Report comment"
+            >
+              <FlagIcon size={14} />
+              <span>
+                {reportState === "done"
+                  ? "Reported"
+                  : reportState === "sending"
+                    ? "Sending…"
+                    : "Report"}
+              </span>
             </button>
           </div>
 

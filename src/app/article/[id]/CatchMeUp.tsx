@@ -4,30 +4,44 @@ import { useState } from "react";
 import { SparkleIcon } from "@/components/icons";
 
 export default function CatchMeUp({ articleId }: { articleId: string }) {
-  const [loading, setLoading] = useState(false);
-  const [summary, setSummary] = useState<string | null>(null);
+  const [streaming, setStreaming] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function run() {
-    setLoading(true);
+    setStarted(true);
+    setStreaming(true);
     setError(null);
+    setSummary("");
     try {
       const res = await fetch("/api/ai/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ articleId }),
       });
-      if (!res.ok) throw new Error("Could not summarize");
-      const j = (await res.json()) as { summary: string };
-      setSummary(j.summary);
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? "Could not summarize");
+      }
+      if (!res.body) throw new Error("No response body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        setSummary((prev) => prev + chunk);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
-      setLoading(false);
+      setStreaming(false);
     }
   }
 
-  if (summary) {
+  if (started) {
     return (
       <div className="rounded-xl border border-[var(--border)] bg-[var(--muted-bg)] p-4">
         <div className="mb-2 flex items-center gap-2">
@@ -36,9 +50,21 @@ export default function CatchMeUp({ articleId }: { articleId: string }) {
             Catch me up
           </span>
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
-          {summary}
-        </p>
+        {summary ? (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--ink)]">
+            {summary}
+            {streaming && (
+              <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-px animate-pulse bg-[var(--primary)] align-middle" />
+            )}
+          </p>
+        ) : streaming ? (
+          <div className="space-y-2">
+            <div className="h-3 w-2/3 animate-pulse rounded bg-[var(--border)]" />
+            <div className="h-3 w-full animate-pulse rounded bg-[var(--border)]" />
+            <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--border)]" />
+          </div>
+        ) : null}
+        {error && <p className="mt-2 text-xs text-[var(--primary)]">{error}</p>}
       </div>
     );
   }
@@ -47,11 +73,11 @@ export default function CatchMeUp({ articleId }: { articleId: string }) {
     <div>
       <button
         onClick={run}
-        disabled={loading}
+        disabled={streaming}
         className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--ink)] hover:border-[var(--primary)] hover:text-[var(--primary)] disabled:opacity-60"
       >
         <SparkleIcon size={16} />
-        {loading ? "Reading the thread…" : "Catch me up on this discussion"}
+        Catch me up on this discussion
       </button>
       {error && <p className="mt-2 text-xs text-[var(--primary)]">{error}</p>}
     </div>
