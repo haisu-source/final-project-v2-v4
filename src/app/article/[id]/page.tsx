@@ -52,10 +52,16 @@ async function loadArticle(id: string): Promise<{
   const [statsRes, actionsRes, eventsRes] = await Promise.all([
     supabase.rpc("get_article_stats", { p_article_id: id }),
     supabase.from("actions").select("*").eq("article_id", id),
+    // Keep the panel fresh: hide events that finished more than 12 hours
+    // ago (or — if no ends_at — that started more than 12 hours ago). Today's
+    // and future events still show, sorted soonest first.
     supabase
       .from("community_events")
       .select("*")
       .eq("article_id", id)
+      .or(
+        `ends_at.gte.${new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()},and(ends_at.is.null,starts_at.gte.${new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()})`
+      )
       .order("starts_at", { ascending: true }),
   ]);
 
