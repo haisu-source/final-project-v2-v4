@@ -31,9 +31,28 @@ export default function CommentSection({
     setLoading(false);
   }, [articleId]);
 
+  // Initial fetch. Inlined (instead of calling `load()` directly in the effect
+  // body) so the lint rule that flags synchronous setState-in-effect stays
+  // satisfied — every setState here lives behind an await, and a cancellation
+  // guard prevents writes after unmount or articleId change.
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(`/api/comments?articleId=${articleId}`, {
+        cache: "no-store",
+      });
+      if (cancelled) return;
+      if (res.ok) {
+        const j = (await res.json()) as { comments: CommentType[] };
+        if (cancelled) return;
+        setComments(j.comments);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [articleId]);
 
   useEffect(() => {
     if (!supabaseUrl || !supabaseKey) return;
