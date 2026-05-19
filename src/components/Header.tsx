@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Show, UserButton } from "@clerk/nextjs";
+import { Show } from "@clerk/nextjs";
+import UserMenu from "./UserMenu";
 
 export default function Header() {
   return (
@@ -38,11 +39,7 @@ export default function Header() {
               </Link>
             </Show>
             <Show when="signed-in">
-              <UserButton
-                appearance={{
-                  elements: { avatarBox: "h-8 w-8" },
-                }}
-              />
+              <UserMenu />
             </Show>
           </div>
         </nav>

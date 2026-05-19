@@ -225,3 +225,13 @@ export function ArrowUpRightIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function HistoryIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3 3 3 8 8 8" />
+      <polyline points="12 7 12 12 15 14" />
+    </svg>
+  );
+}
