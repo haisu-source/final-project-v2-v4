@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Action, ActionKind, CommunityEvent } from "@/lib/types";
 import {
   ArrowUpRightIcon,
@@ -91,22 +92,36 @@ export default function ActionsAndEvents({ actions, events }: Props) {
                     )}
                   </div>
                   <h3 className="font-serif text-[15px] font-semibold leading-snug text-[var(--ink)]">
-                    {a.title}
+                    <Link
+                      href={`/action/${a.id}`}
+                      className="hover:text-[var(--primary)]"
+                    >
+                      {a.title}
+                    </Link>
                   </h3>
                   <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
                     {a.description}
                   </p>
-                  {a.url && (
-                    <a
-                      href={a.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <Link
+                      href={`/action/${a.id}`}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
                     >
-                      {a.cta_label ?? "Take this on"}
+                      How to do this
                       <ArrowUpRightIcon size={12} />
-                    </a>
-                  )}
+                    </Link>
+                    {a.url && (
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-[var(--muted)] hover:text-[var(--primary)]"
+                      >
+                        {a.cta_label ?? "Open the original"}
+                        <ArrowUpRightIcon size={12} />
+                      </a>
+                    )}
+                  </div>
                 </li>
               );
             })}
@@ -155,7 +170,12 @@ export default function ActionsAndEvents({ actions, events }: Props) {
                   </span>
                 </div>
                 <h3 className="font-serif text-[15px] font-semibold leading-snug text-[var(--ink)]">
-                  {e.title}
+                  <Link
+                    href={`/event/${e.id}`}
+                    className="hover:text-[var(--primary)]"
+                  >
+                    {e.title}
+                  </Link>
                 </h3>
                 <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
                   {e.description}
@@ -167,17 +187,26 @@ export default function ActionsAndEvents({ actions, events }: Props) {
                   </span>
                   {e.organizer && <span>by {e.organizer}</span>}
                 </div>
-                {e.url && (
-                  <a
-                    href={e.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Link
+                    href={`/event/${e.id}`}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline"
                   >
-                    Details + RSVP
+                    Details + add to calendar
                     <ArrowUpRightIcon size={12} />
-                  </a>
-                )}
+                  </Link>
+                  {e.url && (
+                    <a
+                      href={e.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-[var(--muted)] hover:text-[var(--primary)]"
+                    >
+                      Open the original
+                      <ArrowUpRightIcon size={12} />
+                    </a>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
