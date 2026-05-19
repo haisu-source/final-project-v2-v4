@@ -7,6 +7,7 @@ import CommentSection from "@/components/CommentSection";
 import EngagementMetrics from "@/components/EngagementMetrics";
 import QRCode from "@/components/QRCode";
 import ActionsAndEvents from "@/components/ActionsAndEvents";
+import RecordReadingHistory from "@/components/RecordReadingHistory";
 import CatchMeUp from "./CatchMeUp";
 import crypto from "crypto";
 
@@ -94,6 +95,15 @@ export default async function ArticlePage({
 
   return (
     <article className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+      <RecordReadingHistory
+        article={{
+          id: article.id,
+          title: article.title,
+          source: article.source,
+          category: article.category,
+          location: article.location,
+        }}
+      />
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-[var(--muted)]">
         <span className="rounded-full bg-[var(--muted-bg)] px-2 py-0.5 font-semibold text-[var(--ink)]">
           {CATEGORY_LABEL[article.category] ?? article.category}

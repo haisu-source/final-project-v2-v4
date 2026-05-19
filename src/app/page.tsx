@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ArticleCard from "@/components/ArticleCard";
+import ReadingHistory from "@/components/ReadingHistory";
 import type { Article, Category, EngagementStats } from "@/lib/types";
 import { getSupabase } from "@/lib/supabase";
 
@@ -178,6 +179,8 @@ export default async function HomePage({
           );
         })}
       </div>
+
+      <ReadingHistory />
 
       <Section title="Trending" articles={trending} />
       <Section title="Recent" articles={recent} />
